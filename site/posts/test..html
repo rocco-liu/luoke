@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>先进技术和实践的思考者</title>
+  <link rel="stylesheet" href="/stylesheets/highlight/docco.css">
+</head>
+<body>
+<hr>
+<p>layout: post
+title: &quot;深入理解ActiveSupport::Concern&quot;
+date: 2014-04-11 15:51:10 +0800
+comments: true
+categories: [&quot;ruby&quot;, &quot;rails&quot;]</p>
+<p>keywords: &quot;activesupport::concern, 胖model, rails, model分层, activesupport::concern详解&quot;</p>
+<h2 id="description-rails-activesupport-concern-">description: &quot;详细介绍和深入理解rails中activesupport:concern的作用&quot;</h2>
+<p>当model变得越来越胖的时候，很自然要给model减肥不是？要不然打开model一眼望去看不到头的方法会恼火死人！
+不受人待见的胖model长得像下面这个样子：</p>
+<pre><code class="lang-ruby"><span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">Dog</span></span>
+ <span class="hljs-comment">#...此处略去平铺的200++个方法</span>
+<span class="hljs-keyword">end</span>
+</code></pre>
+<p>很多NB大神祭出了自己给model减肥的方法，各有各的写法，大同小异，大概长得像下面这个样子：</p>
+<pre><code class="lang-ruby"><span class="hljs-class"><span class="hljs-keyword">module</span> <span class="hljs-title">Courtship</span></span>
+  <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">self</span>.<span class="hljs-title">included</span><span class="hljs-params">(base)</span></span>
+    base.extend ClassMethods
+  <span class="hljs-keyword">end</span>
+
+  <span class="hljs-class"><span class="hljs-keyword">module</span> <span class="hljs-title">ClassMethods</span></span>
+    <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">feel_upset</span></span>
+      puts <span class="hljs-string">""</span>
+    <span class="hljs-keyword">end</span>
+  <span class="hljs-keyword">end</span>
+
+  <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">find_other_side</span></span>
+    puts <span class="hljs-string">"where is my other side?"</span>
+  <span class="hljs-keyword">end</span>
+
+  <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">say_love_you</span></span>
+    puts <span class="hljs-string">"i love you"</span>
+  <span class="hljs-keyword">end</span>
+<span class="hljs-keyword">end</span>
+
+<span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">Dog</span></span>
+  <span class="hljs-keyword">include</span> Courtship
+<span class="hljs-keyword">end</span>
+</code></pre>
+<p>像上面这样就能把狗狗求爱的这个行为分离到一个模块中，这个模块中应该包含和求爱这个行为相关的方法。按照行为分离出来的模块才有被reuse的可能性。比如猫猫也不是要求爱嘛。。。</p>
+<p>传说中的核心成员们碰头一商量发现大家都这么干，千篇一律的，干脆搞到ActiveSupport里面去吧~，帮大家省两句代码吧。于是乎代码就变成下面这个样子了：</p>
+<pre><code class="lang-ruby"><span class="hljs-keyword">require</span> <span class="hljs-string">'active_support/concern'</span>
+
+<span class="hljs-class"><span class="hljs-keyword">module</span> <span class="hljs-title">Courtship</span></span>
+  extend ActiveSupport::Concern
+    <span class="hljs-class"><span class="hljs-keyword">module</span> <span class="hljs-title">ClassMethods</span></span>
+     <span class="hljs-comment">#...</span>
+    <span class="hljs-keyword">end</span>
+  <span class="hljs-comment">#...</span>
+<span class="hljs-keyword">end</span>
+
+<span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">Dog</span></span>
+  <span class="hljs-keyword">include</span> Courtship
+<span class="hljs-keyword">end</span>
+</code></pre>
+<p>如果你真的相信CoreTeam为了体恤民情帮大家省两句代码，那就跟我一样太XX了！！~其实ActiveSupport::Concern主要帮我们解决了模块之间的依赖问题。模块之间的依赖其实就是假如模块B中调用了模块A中得方法那么我们就说模块B依赖模块A，回到狗狗的例子，比如狗狗求爱的模块依赖一个名叫洗澡的模块，求爱之前总是要整理整理干净嘛。。。像下面这个样子</p>
+<pre><code class="lang-ruby"><span class="hljs-class"><span class="hljs-keyword">module</span> <span class="hljs-title">Bath</span></span>
+  <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">self</span>.<span class="hljs-title">included</span><span class="hljs-params">(base)</span></span>
+    base.class_eval <span class="hljs-keyword">do</span>
+      <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">self</span>.<span class="hljs-title">take_a_hot_bath</span></span>
+        puts <span class="hljs-string">"wow~"</span>
+      <span class="hljs-keyword">end</span>
+    <span class="hljs-keyword">end</span>
+  <span class="hljs-keyword">end</span>
+<span class="hljs-keyword">end</span>
+
+<span class="hljs-class"><span class="hljs-keyword">module</span> <span class="hljs-title">CourtShip</span></span>
+  <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">self</span>.<span class="hljs-title">included</span><span class="hljs-params">(base)</span></span>
+    base.extend ClassMethods
+    base.take_a_hot_bath <span class="hljs-comment">#洗个热水澡，这里调用了Bath模块中的方法</span>
+  <span class="hljs-keyword">end</span>
+  <span class="hljs-class"><span class="hljs-keyword">module</span> <span class="hljs-title">ClassMethods</span></span>
+   <span class="hljs-comment">#...</span>
+  <span class="hljs-keyword">end</span>
+  <span class="hljs-comment">#...</span>
+<span class="hljs-keyword">end</span>
+
+<span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">Dog</span></span>
+  <span class="hljs-keyword">include</span> Bath   <span class="hljs-comment">#引入Bath模块，这个是被逼的，因为Courtship中使用了Bath的方法</span>
+  <span class="hljs-keyword">include</span> Courtship
+<span class="hljs-keyword">end</span>
+</code></pre>
+<p>上面这个例子里面Dog类本不应该去关心CourtShip和Bath之间的依赖关系对吧？要是引用N多模块难道我们还要搞清楚他们之间复杂的依赖关系吗？所以很自然想到为什么不在CourtShip里面把Bath模块引入进来，然后在Dog类中只引入CourtShip模块呢？把依赖交给模块自身去处理这点思路肯定是对的，好我们这么做试试看</p>
+<pre><code class="lang-ruby"><span class="hljs-keyword">module</span> Bath
+#...
+<span class="hljs-keyword">end</span>
+
+<span class="hljs-keyword">module</span> CourtShip
+ include Bath
+
+  def <span class="hljs-keyword">self</span>.included(base)
+    base.take_a_hot_bath    
+  <span class="hljs-keyword">end</span>
+<span class="hljs-keyword">end</span>
+
+<span class="hljs-keyword">class</span> Dog
+ include CourtShip #undefined <span class="hljs-function"><span class="hljs-keyword">method</span> `<span class="hljs-title">take_a_hot_bath</span>' <span class="hljs-title">for</span> <span class="hljs-title">Dog</span>:</span><span class="hljs-keyword">Class</span> 
+<span class="hljs-keyword">end</span>
+</code></pre>
+<p>想法对了但上面这段代码是不能工作的。Why？原因是当Bath模块被include的时候base是CourtShip而不是Dog,这样的话，self.take_a_hot_bath方法就变成了CourtShip的singleton_method,Dog类无论是include还是extend都访问不到这个方法，所以就会报找不到方法&quot;take_a_hot_bath&quot;这个错误</p>
+<p>使用ActiveSupport::Corncern就帮助我们解决了这个问题</p>
+<pre><code class="lang-ruby"><span class="hljs-keyword">require</span> <span class="hljs-string">'active_support/concern'</span>
+<span class="hljs-class"><span class="hljs-keyword">module</span> <span class="hljs-title">Bath</span></span>
+  extend ActiveSupport::Concern
+  included <span class="hljs-keyword">do</span> 
+    <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">self</span>.<span class="hljs-title">take_a_hot_bath</span></span>
+      puts <span class="hljs-string">"wow~"</span>
+    <span class="hljs-keyword">end</span>
+  <span class="hljs-keyword">end</span>
+<span class="hljs-keyword">end</span>
+
+<span class="hljs-class"><span class="hljs-keyword">module</span> <span class="hljs-title">CourtShip</span></span>
+  extend ActiveSupport::Concern
+  <span class="hljs-keyword">include</span> Bath
+  included <span class="hljs-keyword">do</span>
+    <span class="hljs-keyword">self</span>.take_a_hot_bath
+  <span class="hljs-keyword">end</span>
+<span class="hljs-keyword">end</span>
+
+<span class="hljs-class"><span class="hljs-keyword">class</span> <span class="hljs-title">Dog</span></span>
+  <span class="hljs-keyword">include</span> CourtShip
+<span class="hljs-keyword">end</span>
+</code></pre>
+
+</body>
+</html>
